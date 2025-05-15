@@ -18,7 +18,7 @@ func LoadConfig() *Config {
 		DBPort:     getEnv("DB_PORT", "3306"),
 		DBUser:     getEnv("DB_USER", "root"),
 		DBPassword: getEnv("DB_PASSWORD", "password"),
-		DBName:     getEnv("DB_NAME", "igaming_service"),
+		DBName:     getEnv("DB_NAME", "igaming"),
 	}
 }
 

@@ -7,18 +7,7 @@ run: build
 	./bin/main
 
 migrate-up:
-	docker run --rm \
-		-v $(PWD)/migrations:/migrations \
-		--network="host" \
-		mattes/goose:latest \
-		mysql "root:password@tcp(localhost:3306)/igaming" up
-
-migrate-down:
-	docker run --rm \
-		-v $(PWD)/migrations:/migrations \
-		--network="host" \
-		mattes/goose:latest \
-		mysql "root:password@tcp(localhost:3306)/igaming" down
+	docker-compose up migrate
 
 test:
 	go test ./...

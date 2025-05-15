@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"igaming/internal/models"
 )
 
@@ -40,4 +41,38 @@ func (r *TournamentRepository) Create(ctx context.Context, tournament *models.To
 	tournament.ID = uint(id)
 
 	return nil
+}
+
+func (r *TournamentRepository) GetAll(ctx context.Context) ([]models.Tournament, error) {
+    query := `SELECT id, name, prize_pool, start_date, end_date, created_at, updated_at FROM tournaments`
+    
+    rows, err := r.db.QueryContext(ctx, query)
+    if err != nil {
+        return nil, fmt.Errorf("failed to query tournaments: %w", err)
+    }
+    defer rows.Close()
+
+    var tournaments []models.Tournament
+    for rows.Next() {
+        var t models.Tournament
+        err := rows.Scan(
+            &t.ID,
+            &t.Name,
+            &t.PrizePool,
+            &t.StartDate,
+            &t.EndDate,
+            &t.CreatedAt,
+            &t.UpdatedAt,
+        )
+        if err != nil {
+            return nil, fmt.Errorf("failed to scan tournament row: %w", err)
+        }
+        tournaments = append(tournaments, t)
+    }
+
+    if err = rows.Err(); err != nil {
+        return nil, fmt.Errorf("rows error: %w", err)
+    }
+
+    return tournaments, nil
 }

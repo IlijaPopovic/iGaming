@@ -1,0 +1,30 @@
+basePath: /
+host: localhost:8080
+info:
+  contact: {}
+  description: Basic tournament management API
+  title: Tournament API
+  version: "1.0"
+paths:
+  /tournaments:
+    get:
+      consumes:
+      - application/json
+      description: Get list of all tournaments
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              type: object
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            type: object
+      summary: Get all tournaments
+      tags:
+      - tournaments
+swagger: "2.0"

@@ -1,5 +1,4 @@
 #!/bin/sh
-# Wait for database to be ready
 until nc -z -v -w30 db 3306
 do
   echo "Waiting for database connection..."

@@ -10,7 +10,6 @@ type TournamentResult struct {
 	PrizeAmount  float64   `json:"prize_amount"`
 	CreatedAt    time.Time `json:"created_at"`
 	
-	// Associations
 	Player     *Player     `json:"player"`
 	Tournament *Tournament `json:"tournament"`
 }
