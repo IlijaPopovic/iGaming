@@ -87,7 +87,7 @@ BEGIN
         placement INT,
         prize DECIMAL(15, 2)
     );
-
+    -- >>>>>>>>>>>CHAGE THE SPLIT LATTER IT DOES NOT MAKE SENSE!
     INSERT INTO tmp_prize_distribution (player_id, placement, prize)
     SELECT
         rp.player_id,

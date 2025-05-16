@@ -15,6 +15,164 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/bets": {
+            "get": {
+                "description": "Retrieve list of all placed bets",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "bets"
+                ],
+                "summary": "Get all bets",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dtos.TournamentBetResponse"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Place a wager on a tournament",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "bets"
+                ],
+                "summary": "Place a new bet",
+                "parameters": [
+                    {
+                        "description": "Bet details",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dtos.CreateTournamentBetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dtos.TournamentBetResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/players": {
+            "get": {
+                "description": "Retrieve list of all registered players",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "players"
+                ],
+                "summary": "Get all players",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dtos.PlayerResponse"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Register a new player account",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "players"
+                ],
+                "summary": "Create a new player",
+                "parameters": [
+                    {
+                        "description": "Player registration data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dtos.CreatePlayerRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dtos.PlayerResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/tournaments": {
             "get": {
                 "description": "Get list of all tournaments",
@@ -34,16 +192,275 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "type": "object"
+                                "$ref": "#/definitions/models.Tournament"
                             }
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/handlers.ErrorResponse"
                         }
                     }
+                }
+            },
+            "post": {
+                "description": "Creates a new tournament with the provided details",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tournaments"
+                ],
+                "summary": "Create a new tournament",
+                "parameters": [
+                    {
+                        "description": "Tournament Creation Data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dtos.CreateTournamentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dtos.TournamentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "dtos.CreatePlayerRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "name",
+                "password"
+            ],
+            "properties": {
+                "account_balance": {
+                    "description": "Initial account balance\nminimum: 0\nexample: 100.00",
+                    "type": "number",
+                    "minimum": 0
+                },
+                "email": {
+                    "description": "Player's email address\nrequired: true\nformat: email\nexample: john.doe@example.com",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Player's display name\nrequired: true\nexample: JohnDoe123",
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 2
+                },
+                "password": {
+                    "description": "Player's password\nrequired: true\nminLength: 8\nexample: securePassword123!",
+                    "type": "string",
+                    "minLength": 8
+                }
+            }
+        },
+        "dtos.CreateTournamentBetRequest": {
+            "type": "object",
+            "required": [
+                "bet_amount",
+                "player_id",
+                "tournament_id"
+            ],
+            "properties": {
+                "bet_amount": {
+                    "description": "Amount to wager in USD\nrequired: true\nminimum: 0.01\nexample: 50.00",
+                    "type": "number"
+                },
+                "player_id": {
+                    "description": "ID of the player making the bet\nrequired: true\nexample: 123",
+                    "type": "integer"
+                },
+                "tournament_id": {
+                    "description": "ID of the tournament to bet on\nrequired: true\nexample: 456",
+                    "type": "integer"
+                }
+            }
+        },
+        "dtos.CreateTournamentRequest": {
+            "type": "object",
+            "required": [
+                "name",
+                "prize_pool"
+            ],
+            "properties": {
+                "end_date": {
+                    "description": "format: date-time\nexample: 2023-09-05T18:00:00Z",
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "name": {
+                    "description": "Tournament name (3-100 characters)\nexample: tournament123\ndefault: tournament123",
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 3
+                },
+                "prize_pool": {
+                    "description": "Prize pool amount (must be positive)\nexample: 3333\ndefault: 3333",
+                    "type": "number",
+                    "default": 3333
+                },
+                "start_date": {
+                    "description": "format: date-time\nexample: 2023-09-01T15:00:00Z",
+                    "type": "string",
+                    "format": "date-time"
+                }
+            }
+        },
+        "dtos.PlayerResponse": {
+            "type": "object",
+            "properties": {
+                "account_balance": {
+                    "description": "Current account balance\nexample: 150.50",
+                    "type": "number"
+                },
+                "created_at": {
+                    "description": "Account creation timestamp\nexample: 2023-08-15T14:30:45Z",
+                    "type": "string"
+                },
+                "email": {
+                    "description": "The player's email\nexample: john.doe@example.com",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "The player ID\nexample: 1",
+                    "type": "integer"
+                },
+                "name": {
+                    "description": "The player's display name\nexample: JohnDoe123",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "description": "Last update timestamp\nexample: 2023-08-16T09:15:22Z",
+                    "type": "string"
+                }
+            }
+        },
+        "dtos.TournamentBetResponse": {
+            "type": "object",
+            "properties": {
+                "bet_amount": {
+                    "description": "Wagered amount\nexample: 50.00",
+                    "type": "number"
+                },
+                "created_at": {
+                    "description": "Bet placement timestamp\nexample: 2023-09-01T10:15:00Z",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "Bet ID\nexample: 1",
+                    "type": "integer"
+                },
+                "player_id": {
+                    "description": "Player ID\nexample: 123",
+                    "type": "integer"
+                },
+                "tournament_id": {
+                    "description": "Tournament ID\nexample: 456",
+                    "type": "integer"
+                }
+            }
+        },
+        "dtos.TournamentResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "description": "format: date-time\nexample: 2023-08-25T09:30:00Z",
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "end_date": {
+                    "description": "format: date-time\nexample: 2023-09-05T18:00:00Z",
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "id": {
+                    "description": "Tournament ID",
+                    "type": "integer"
+                },
+                "name": {
+                    "description": "Tournament name",
+                    "type": "string"
+                },
+                "prize_pool": {
+                    "description": "Prize pool amount",
+                    "type": "number"
+                },
+                "start_date": {
+                    "description": "format: date-time\nexample: 2023-09-01T15:00:00Z",
+                    "type": "string",
+                    "format": "date-time"
+                }
+            }
+        },
+        "handlers.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string",
+                    "example": "error message"
+                }
+            }
+        },
+        "models.Tournament": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "description": "Creation timestamp\nreadOnly: true\nformat: date-time\nexample: 2023-08-25T09:30:00Z",
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "end_date": {
+                    "description": "End date/time of the tournament\nrequired: true\nformat: date-time\nexample: 2023-09-05T18:00:00Z",
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "id": {
+                    "description": "The unique identifier for the tournament\nexample: 1",
+                    "type": "integer"
+                },
+                "name": {
+                    "description": "Name of the tournament\nrequired: true\nexample: World Championship",
+                    "type": "string"
+                },
+                "prize_pool": {
+                    "description": "Total prize pool in USD\nrequired: true\nminimum: 0\nexample: 100000.00",
+                    "type": "number"
+                },
+                "start_date": {
+                    "description": "Start date/time of the tournament\nrequired: true\nformat: date-time\nexample: 2023-09-01T15:00:00Z",
+                    "type": "string",
+                    "format": "date-time"
+                },
+                "updated_at": {
+                    "description": "Timestamp when tournament was last updated\nreadOnly: true\nexample: 2023-08-28T14:45:00Z",
+                    "type": "string"
                 }
             }
         }
@@ -56,8 +473,8 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "localhost:8080",
 	BasePath:         "/",
 	Schemes:          []string{},
-	Title:            "Tournament API",
-	Description:      "Basic tournament management API",
+	Title:            "iGaming API",
+	Description:      "Gaming tournament management system",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

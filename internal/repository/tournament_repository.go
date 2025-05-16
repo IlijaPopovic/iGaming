@@ -3,8 +3,10 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"igaming/internal/models"
+	"log"
 )
 
 type TournamentRepository struct {
@@ -16,34 +18,35 @@ func NewTournamentRepository(db *sql.DB) *TournamentRepository {
 }
 
 func (r *TournamentRepository) Create(ctx context.Context, tournament *models.Tournament) error {
-	query := `INSERT INTO Tournament 
-	(name, prize_pool, start_date, end_date) 
-	VALUES (?, ?, ?, ?)`
+    query := `INSERT INTO tournaments 
+    (name, prize_pool, start_date, end_date) 
+    VALUES (?, ?, ?, ?)`
 
-	result, err := r.db.ExecContext(
-		ctx, 
-		query, 
-		tournament.Name, 
-		tournament.PrizePool, 
-		tournament.StartDate, 
-		tournament.EndDate)
+    result, err := r.db.ExecContext(
+        ctx, 
+        query, 
+        tournament.Name, 
+        tournament.PrizePool, 
+        tournament.StartDate, 
+        tournament.EndDate,
+    )
 
-	if err != nil {
-		return err
-	}
+    if err != nil {
+        log.Printf("Database error: %v", err)
+        return fmt.Errorf("database operation failed: %w", err)
+    }
 
-	id, err := result.LastInsertId()
+    id, err := result.LastInsertId()
+    if err != nil {
+        log.Printf("LastInsertId error: %v", err)
+        return fmt.Errorf("failed to get last insert ID: %w", err)
+    }
 
-	if err != nil {
-		return err
-	}
-
-	tournament.ID = uint(id)
-
-	return nil
+    tournament.ID = uint(id)
+    return nil
 }
 
-func (r *TournamentRepository) GetAll(ctx context.Context) ([]models.Tournament, error) {
+func (r *TournamentRepository) GetAllTournaments(ctx context.Context) ([]models.Tournament, error) {
     query := `SELECT id, name, prize_pool, start_date, end_date, created_at, updated_at FROM tournaments`
     
     rows, err := r.db.QueryContext(ctx, query)
@@ -75,4 +78,33 @@ func (r *TournamentRepository) GetAll(ctx context.Context) ([]models.Tournament,
     }
 
     return tournaments, nil
+}
+
+func (r *TournamentRepository) GetTournamentByID(ctx context.Context, id uint) (*models.Tournament, error) {
+    query := `SELECT 
+        id, name, prize_pool, start_date, end_date, created_at, updated_at 
+        FROM tournaments 
+        WHERE id = ?`
+
+    row := r.db.QueryRowContext(ctx, query, id)
+    
+    var tournament models.Tournament
+    err := row.Scan(
+        &tournament.ID,
+        &tournament.Name,
+        &tournament.PrizePool,
+        &tournament.StartDate,
+        &tournament.EndDate,
+        &tournament.CreatedAt,
+        &tournament.UpdatedAt,
+    )
+
+    if err != nil {
+        if errors.Is(err, sql.ErrNoRows) {
+            return nil, fmt.Errorf("tournament with ID %d not found", id)
+        }
+        return nil, fmt.Errorf("failed to get tournament: %w", err)
+    }
+    
+    return &tournament, nil
 }

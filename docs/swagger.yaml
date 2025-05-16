@@ -1,11 +1,360 @@
 basePath: /
+definitions:
+  dtos.CreatePlayerRequest:
+    properties:
+      account_balance:
+        description: |-
+          Initial account balance
+          minimum: 0
+          example: 100.00
+        minimum: 0
+        type: number
+      email:
+        description: |-
+          Player's email address
+          required: true
+          format: email
+          example: john.doe@example.com
+        type: string
+      name:
+        description: |-
+          Player's display name
+          required: true
+          example: JohnDoe123
+        maxLength: 100
+        minLength: 2
+        type: string
+      password:
+        description: |-
+          Player's password
+          required: true
+          minLength: 8
+          example: securePassword123!
+        minLength: 8
+        type: string
+    required:
+    - email
+    - name
+    - password
+    type: object
+  dtos.CreateTournamentBetRequest:
+    properties:
+      bet_amount:
+        description: |-
+          Amount to wager in USD
+          required: true
+          minimum: 0.01
+          example: 50.00
+        type: number
+      player_id:
+        description: |-
+          ID of the player making the bet
+          required: true
+          example: 123
+        type: integer
+      tournament_id:
+        description: |-
+          ID of the tournament to bet on
+          required: true
+          example: 456
+        type: integer
+    required:
+    - bet_amount
+    - player_id
+    - tournament_id
+    type: object
+  dtos.CreateTournamentRequest:
+    properties:
+      end_date:
+        description: |-
+          format: date-time
+          example: 2023-09-05T18:00:00Z
+        format: date-time
+        type: string
+      name:
+        description: |-
+          Tournament name (3-100 characters)
+          example: tournament123
+          default: tournament123
+        maxLength: 100
+        minLength: 3
+        type: string
+      prize_pool:
+        default: 3333
+        description: |-
+          Prize pool amount (must be positive)
+          example: 3333
+          default: 3333
+        type: number
+      start_date:
+        description: |-
+          format: date-time
+          example: 2023-09-01T15:00:00Z
+        format: date-time
+        type: string
+    required:
+    - name
+    - prize_pool
+    type: object
+  dtos.PlayerResponse:
+    properties:
+      account_balance:
+        description: |-
+          Current account balance
+          example: 150.50
+        type: number
+      created_at:
+        description: |-
+          Account creation timestamp
+          example: 2023-08-15T14:30:45Z
+        type: string
+      email:
+        description: |-
+          The player's email
+          example: john.doe@example.com
+        type: string
+      id:
+        description: |-
+          The player ID
+          example: 1
+        type: integer
+      name:
+        description: |-
+          The player's display name
+          example: JohnDoe123
+        type: string
+      updated_at:
+        description: |-
+          Last update timestamp
+          example: 2023-08-16T09:15:22Z
+        type: string
+    type: object
+  dtos.TournamentBetResponse:
+    properties:
+      bet_amount:
+        description: |-
+          Wagered amount
+          example: 50.00
+        type: number
+      created_at:
+        description: |-
+          Bet placement timestamp
+          example: 2023-09-01T10:15:00Z
+        type: string
+      id:
+        description: |-
+          Bet ID
+          example: 1
+        type: integer
+      player_id:
+        description: |-
+          Player ID
+          example: 123
+        type: integer
+      tournament_id:
+        description: |-
+          Tournament ID
+          example: 456
+        type: integer
+    type: object
+  dtos.TournamentResponse:
+    properties:
+      created_at:
+        description: |-
+          format: date-time
+          example: 2023-08-25T09:30:00Z
+        format: date-time
+        type: string
+      end_date:
+        description: |-
+          format: date-time
+          example: 2023-09-05T18:00:00Z
+        format: date-time
+        type: string
+      id:
+        description: Tournament ID
+        type: integer
+      name:
+        description: Tournament name
+        type: string
+      prize_pool:
+        description: Prize pool amount
+        type: number
+      start_date:
+        description: |-
+          format: date-time
+          example: 2023-09-01T15:00:00Z
+        format: date-time
+        type: string
+    type: object
+  handlers.ErrorResponse:
+    properties:
+      error:
+        example: error message
+        type: string
+    type: object
+  models.Tournament:
+    properties:
+      created_at:
+        description: |-
+          Creation timestamp
+          readOnly: true
+          format: date-time
+          example: 2023-08-25T09:30:00Z
+        format: date-time
+        type: string
+      end_date:
+        description: |-
+          End date/time of the tournament
+          required: true
+          format: date-time
+          example: 2023-09-05T18:00:00Z
+        format: date-time
+        type: string
+      id:
+        description: |-
+          The unique identifier for the tournament
+          example: 1
+        type: integer
+      name:
+        description: |-
+          Name of the tournament
+          required: true
+          example: World Championship
+        type: string
+      prize_pool:
+        description: |-
+          Total prize pool in USD
+          required: true
+          minimum: 0
+          example: 100000.00
+        type: number
+      start_date:
+        description: |-
+          Start date/time of the tournament
+          required: true
+          format: date-time
+          example: 2023-09-01T15:00:00Z
+        format: date-time
+        type: string
+      updated_at:
+        description: |-
+          Timestamp when tournament was last updated
+          readOnly: true
+          example: 2023-08-28T14:45:00Z
+        type: string
+    type: object
 host: localhost:8080
 info:
   contact: {}
-  description: Basic tournament management API
-  title: Tournament API
+  description: Gaming tournament management system
+  title: iGaming API
   version: "1.0"
 paths:
+  /bets:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve list of all placed bets
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dtos.TournamentBetResponse'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Get all bets
+      tags:
+      - bets
+    post:
+      consumes:
+      - application/json
+      description: Place a wager on a tournament
+      parameters:
+      - description: Bet details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dtos.CreateTournamentBetRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dtos.TournamentBetResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Place a new bet
+      tags:
+      - bets
+  /players:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve list of all registered players
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dtos.PlayerResponse'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Get all players
+      tags:
+      - players
+    post:
+      consumes:
+      - application/json
+      description: Register a new player account
+      parameters:
+      - description: Player registration data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dtos.CreatePlayerRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dtos.PlayerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Create a new player
+      tags:
+      - players
   /tournaments:
     get:
       consumes:
@@ -18,13 +367,42 @@ paths:
           description: OK
           schema:
             items:
-              type: object
+              $ref: '#/definitions/models.Tournament'
             type: array
         "500":
           description: Internal Server Error
           schema:
-            type: object
+            $ref: '#/definitions/handlers.ErrorResponse'
       summary: Get all tournaments
+      tags:
+      - tournaments
+    post:
+      consumes:
+      - application/json
+      description: Creates a new tournament with the provided details
+      parameters:
+      - description: Tournament Creation Data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dtos.CreateTournamentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dtos.TournamentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Create a new tournament
       tags:
       - tournaments
 swagger: "2.0"
