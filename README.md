@@ -2,7 +2,7 @@
 
 ## Quick Start
 
-To get the project up and running with just one command:
+Get the project up and running with just one command:
 
 ```bash
 make start-project

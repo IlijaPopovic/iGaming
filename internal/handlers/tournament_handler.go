@@ -3,14 +3,15 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"igaming/internal/handlers/dtos"
 	"igaming/internal/models"
 	"igaming/internal/repository"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
-	"github.com/go-chi/chi"
 	"github.com/go-sql-driver/mysql"
 )
 
@@ -103,7 +104,7 @@ func (h *TournamentHandler) CreateTournament(w http.ResponseWriter, r *http.Requ
     respondWithJSON(w, http.StatusCreated, response)
 }
 
-// Change this, this is not
+// >>>Change this, this is not supposed to be here!1!!!11
 func respondWithError(w http.ResponseWriter, code int, message string) {
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(code)
@@ -114,6 +115,15 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(code)
     json.NewEncoder(w).Encode(payload)
+}
+
+func extractIDFromURL(r *http.Request) (string, error) {
+    parts := strings.Split(r.URL.Path, "/") // Split path into segments
+    if len(parts) < 2 {
+        return "", fmt.Errorf("no ID in URL")
+    }
+    idStr := parts[len(parts)-1] // Get last segment (e.g., /tournaments/123 → "123")
+    return idStr, nil
 }
 
 // DistributePrizes godoc
@@ -129,7 +139,11 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 // @Failure 500 {object} handlers.ErrorResponse
 // @Router /tournaments/{id}/prizes [post]
 func (h *TournamentHandler) DistributePrizes(w http.ResponseWriter, r *http.Request) {
-    idStr := chi.URLParam(r, "id")
+    idStr, err := extractIDFromURL(r)
+    if err != nil {
+        respondWithError(w, http.StatusBadRequest, "Invalid URL extraction")
+        return
+    }
     tournamentID, err := strconv.ParseUint(idStr, 10, 32)
     if err != nil {
         respondWithError(w, http.StatusBadRequest, "Invalid tournament ID")

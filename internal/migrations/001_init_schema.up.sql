@@ -81,6 +81,18 @@ BEGIN
         DENSE_RANK() OVER (ORDER BY total_bets DESC) AS placement
     FROM tmp_bet_counts;
 
+    -- Temp table: Placement counts
+    CREATE TEMPORARY TABLE tmp_placement_counts (
+        placement INT,
+        player_count INT
+    );
+
+    INSERT INTO tmp_placement_counts
+    SELECT placement, COUNT(*) AS player_count
+    FROM tmp_ranked_players
+    WHERE placement <= 3
+    GROUP BY placement;
+
     -- Temp table: Prize distribution
     CREATE TEMPORARY TABLE tmp_prize_distribution (
         player_id INT,
@@ -93,12 +105,13 @@ BEGIN
         rp.player_id,
         rp.placement,
         CASE rp.placement
-            WHEN 1 THEN total_prize_pool * 0.5 / (SELECT COUNT(*) FROM tmp_ranked_players WHERE placement = 1)
-            WHEN 2 THEN total_prize_pool * 0.3 / (SELECT COUNT(*) FROM tmp_ranked_players WHERE placement = 2)
-            WHEN 3 THEN total_prize_pool * 0.2 / (SELECT COUNT(*) FROM tmp_ranked_players WHERE placement = 3)
+            WHEN 1 THEN total_prize_pool * 0.5 / COALESCE(pc.player_count, 1)
+            WHEN 2 THEN total_prize_pool * 0.3 / COALESCE(pc.player_count, 1)
+            WHEN 3 THEN total_prize_pool * 0.2 / COALESCE(pc.player_count, 1)
             ELSE 0
         END AS prize
     FROM tmp_ranked_players rp
+    LEFT JOIN tmp_placement_counts pc ON rp.placement = pc.placement
     WHERE rp.placement <= 3;
 
     -- Insert into tournament_results
@@ -121,6 +134,7 @@ BEGIN
     -- Cleanup
     DROP TEMPORARY TABLE IF EXISTS tmp_bet_counts;
     DROP TEMPORARY TABLE IF EXISTS tmp_ranked_players;
+    DROP TEMPORARY TABLE IF EXISTS tmp_placement_counts;
     DROP TEMPORARY TABLE IF EXISTS tmp_prize_distribution;
 END;
 -- +goose StatementEnd

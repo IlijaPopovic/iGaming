@@ -281,7 +281,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/tournaments/{id}/prizes": {
+        "/tournaments/prizes/{id}": {
             "post": {
                 "description": "Calculate and distribute prizes for a completed tournament",
                 "consumes": [
