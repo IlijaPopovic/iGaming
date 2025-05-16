@@ -193,6 +193,17 @@ definitions:
         example: error message
         type: string
     type: object
+  models.PlayerRanking:
+    properties:
+      account_balance:
+        type: number
+      player_id:
+        type: integer
+      player_name:
+        type: string
+      rank:
+        type: integer
+    type: object
   models.Tournament:
     properties:
       created_at:
@@ -355,6 +366,27 @@ paths:
       summary: Create a new player
       tags:
       - players
+  /rankings:
+    get:
+      consumes:
+      - application/json
+      description: Get ranked list of players by account balance
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.PlayerRanking'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Get player rankings
+      tags:
+      - rankings
   /tournaments:
     get:
       consumes:
@@ -403,6 +435,40 @@ paths:
           schema:
             $ref: '#/definitions/handlers.ErrorResponse'
       summary: Create a new tournament
+      tags:
+      - tournaments
+  /tournaments/{id}/prizes:
+    post:
+      consumes:
+      - application/json
+      description: Calculate and distribute prizes for a completed tournament
+      parameters:
+      - description: Tournament ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: 'message: Prizes distributed successfully'
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/handlers.ErrorResponse'
+      summary: Distribute tournament prizes
       tags:
       - tournaments
 swagger: "2.0"

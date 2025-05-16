@@ -126,25 +126,14 @@ END;
 -- +goose StatementEnd
 
 CREATE VIEW player_rankings AS
-WITH ranked_players AS (
-    SELECT 
-        id AS player_id,
-        name AS player_name,
-        account_balance,
-        RANK() OVER (ORDER BY account_balance DESC) as player_rank,
-        DENSE_RANK() OVER (ORDER BY account_balance DESC) as player_dense_rank,
-        ROW_NUMBER() OVER (ORDER BY account_balance DESC) as player_row_num
-    FROM players
-    WHERE deleted_at IS NULL
-)
 SELECT 
-    player_id,
-    player_name,
+    id AS player_id,
+    name AS player_name,
     account_balance,
-    player_rank,
-    player_dense_rank,
-    player_row_num
-FROM ranked_players;
+    DENSE_RANK() OVER (ORDER BY account_balance DESC) AS player_rank
+FROM players
+WHERE deleted_at IS NULL
+ORDER BY player_rank;
 
 CREATE INDEX idx_tournaments_dates ON tournaments(start_date, end_date);
 CREATE INDEX idx_players_balance ON players(account_balance DESC);
@@ -154,6 +143,42 @@ CREATE INDEX idx_players_email ON players(email);
 CREATE INDEX idx_tournaments_name ON tournaments(name);
 CREATE INDEX idx_bets_created ON tournament_bets(created_at);
 CREATE INDEX idx_results_created ON tournament_results(created_at);
+
+INSERT INTO players (name, email, password_hash, account_balance) VALUES
+('Alice Smith', 'alice.smith@pokermail.com', '$2a$10$W6c8Ua5uO7yj5J2', 1500.00),
+('Bob Johnson', 'bob.johnson@pokermail.com', '$2a$10$ZR9tG4bM2wD1vE3', 8750.00),
+('Charlie Brown', 'charlie.brown@pokermail.com', '$2a$10$XKp7Q2rN4sH6fT8', 4200.00),
+('Diana Miller', 'diana.miller@pokermail.com', '$2a$10$YL3vM9wP6tR7sS2', 15600.00),
+('Evan Davis', 'evan.davis@pokermail.com', '$2a$10$BP4nV8cJ3hG5dF1', 9500.00),
+('Fiona Clark', 'fiona.clark@pokermail.com', '$2a$10$QW2e5rT9yH4jK7L', 3200.00),
+('George Wilson', 'george.wilson@pokermail.com', '$2a$10$AS1dF3gH6jK8L9P', 12800.00),
+('Hannah White', 'hannah.white@pokermail.com', '$2a$10$ZX3cV4bN5m6M7Q8', 6400.00),
+('Ian Moore', 'ian.moore@pokermail.com', '$2a$10$RT6yT7uI8o9P0Q1', 2300.00),
+('Jenny Taylor', 'jenny.taylor@pokermail.com', '$2a$10$EK4jL5mN6bV3C2X', 5100.00);
+
+INSERT INTO tournaments (name, prize_pool, start_date, end_date) VALUES
+('Winter Classic', 25000.00, '2023-01-10 14:00:00', '2023-01-12 22:00:00'),
+('Spring Championship', 50000.00, '2023-03-15 12:00:00', '2023-03-18 20:00:00'),
+('Summer Showdown', 75000.00, '2023-06-01 10:00:00', '2023-06-05 18:00:00'),
+('Autumn Royale', 100000.00, '2023-09-10 16:00:00', '2023-09-15 23:59:59'),
+('Masters Invitational', 150000.00, '2023-11-01 09:00:00', '2023-11-05 21:00:00'),
+('Weekend Warmup', 10000.00, '2023-02-05 08:00:00', '2023-02-05 20:00:00'),
+('High Roller Event', 200000.00, '2023-07-20 12:00:00', '2023-07-25 12:00:00'),
+('Fast Fold Frenzy', 30000.00, '2023-04-10 18:00:00', '2023-04-12 18:00:00'),
+('New Year Knockout', 5000.00, '2023-12-31 23:00:00', '2024-01-01 06:00:00'),
+('Satellite Special', 15000.00, '2023-08-15 10:00:00', '2023-08-16 22:00:00');
+
+INSERT INTO tournament_bets (player_id, tournament_id, bet_amount) VALUES
+(1, 1, 500.00), (1, 1, 300.00),
+(2, 2, 1000.00), (2, 2, 500.00),
+(3, 3, 750.00),
+(4, 4, 1500.00), (4, 4, 1000.00),
+(5, 5, 2000.00),
+(6, 6, 250.00), (6, 6, 150.00),
+(7, 7, 3000.00),
+(8, 8, 600.00),
+(9, 9, 100.00), (9, 9, 50.00),
+(10, 10, 450.00);
 
 -- +goose Down
 

@@ -108,3 +108,34 @@ func (r *PlayerRepository) GetPlayerByID(ctx context.Context, id uint) (*models.
     
     return &player, nil
 }
+
+func (r *PlayerRepository) GetRankings(ctx context.Context) ([]models.PlayerRanking, error) {
+    query := `SELECT * FROM player_rankings`
+
+    rows, err := r.db.QueryContext(ctx, query)
+    if err != nil {
+        return nil, fmt.Errorf("failed to get rankings: %w", err)
+    }
+    defer rows.Close()
+
+    var rankings []models.PlayerRanking
+    for rows.Next() {
+        var r models.PlayerRanking
+        err := rows.Scan(
+            &r.PlayerID,
+            &r.PlayerName,
+            &r.AccountBalance,
+            &r.Rank,
+        )
+        if err != nil {
+            return nil, fmt.Errorf("failed to scan ranking: %w", err)
+        }
+        rankings = append(rankings, r)
+    }
+
+    if err := rows.Err(); err != nil {
+        return nil, fmt.Errorf("rows error: %w", err)
+    }
+
+    return rankings, nil
+}

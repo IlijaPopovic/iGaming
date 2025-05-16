@@ -2,11 +2,16 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"igaming/internal/handlers/dtos"
 	"igaming/internal/models"
 	"igaming/internal/repository"
 	"log"
 	"net/http"
+	"strconv"
+
+	"github.com/go-chi/chi"
+	"github.com/go-sql-driver/mysql"
 )
 
 type TournamentHandler struct {
@@ -53,13 +58,11 @@ func (h *TournamentHandler) GetTournaments(w http.ResponseWriter, r *http.Reques
 func (h *TournamentHandler) CreateTournament(w http.ResponseWriter, r *http.Request) {
     var req dtos.CreateTournamentRequest
     
-    // Handle JSON decoding errors
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
         respondWithError(w, http.StatusBadRequest, "Invalid request format: "+err.Error())
         return
     }
 
-    // Validate request data
     if req.Name == "" {
         respondWithError(w, http.StatusBadRequest, "Name is required")
         return
@@ -75,7 +78,6 @@ func (h *TournamentHandler) CreateTournament(w http.ResponseWriter, r *http.Requ
         return
     }
 
-    // Convert DTO to model
     tournament := models.Tournament{
         Name:      req.Name,
         PrizePool: req.PrizePool,
@@ -83,14 +85,12 @@ func (h *TournamentHandler) CreateTournament(w http.ResponseWriter, r *http.Requ
         EndDate:   req.EndDate,
     }
 
-    // Save to repository
     if err := h.repo.Create(r.Context(), &tournament); err != nil {
         log.Printf("Failed to create tournament: %v", err) // Add logging
         respondWithError(w, http.StatusInternalServerError, "Failed to create tournament: "+err.Error())
         return
     }
     
-    // Convert back to response DTO
     response := dtos.TournamentResponse{
         ID:        tournament.ID,
         Name:      tournament.Name,
@@ -114,4 +114,56 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(code)
     json.NewEncoder(w).Encode(payload)
+}
+
+// DistributePrizes godoc
+// @Summary Distribute tournament prizes
+// @Description Calculate and distribute prizes for a completed tournament
+// @Tags tournaments
+// @Accept  json
+// @Produce  json
+// @Param   id path int true "Tournament ID"
+// @Success 202 {object} map[string]interface{} "message: Prizes distributed successfully"
+// @Failure 400 {object} handlers.ErrorResponse
+// @Failure 404 {object} handlers.ErrorResponse
+// @Failure 500 {object} handlers.ErrorResponse
+// @Router /tournaments/{id}/prizes [post]
+func (h *TournamentHandler) DistributePrizes(w http.ResponseWriter, r *http.Request) {
+    idStr := chi.URLParam(r, "id")
+    tournamentID, err := strconv.ParseUint(idStr, 10, 32)
+    if err != nil {
+        respondWithError(w, http.StatusBadRequest, "Invalid tournament ID")
+        return
+    }
+
+    exists, err := h.repo.Exists(r.Context(), uint(tournamentID))
+    if err != nil || !exists {
+        respondWithError(w, http.StatusNotFound, "Tournament not found")
+        return
+    }
+
+    // Execute distribution
+    if err := h.repo.DistributePrizes(r.Context(), uint(tournamentID)); err != nil {
+        log.Printf("Prize distribution error: %v", err)
+        
+        var mysqlErr *mysql.MySQLError
+        if errors.As(err, &mysqlErr) {
+            switch mysqlErr.Number {
+            case 1329: // No data found
+                respondWithError(w, http.StatusBadRequest, "No eligible bets for tournament")
+                return
+            case 1365: // Division by zero
+                respondWithError(w, http.StatusConflict, "Cannot distribute prizes - invalid participant count")
+                return
+            }
+        }
+
+        respondWithError(w, http.StatusInternalServerError, "Prize distribution failed")
+        return
+    }
+
+    respondWithJSON(w, http.StatusAccepted, map[string]interface{}{
+        "message": "Prizes distributed successfully",
+        "tournament_id": tournamentID,
+    })
 }

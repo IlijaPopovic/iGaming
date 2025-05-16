@@ -108,3 +108,29 @@ func (r *TournamentRepository) GetTournamentByID(ctx context.Context, id uint) (
     
     return &tournament, nil
 }
+
+func (r *TournamentRepository) DistributePrizes(ctx context.Context, tournamentID uint) error {
+    tx, err := r.db.BeginTx(ctx, nil)
+    if err != nil {
+        return fmt.Errorf("failed to begin transaction: %w", err)
+    }
+    defer tx.Rollback()
+
+    _, err = tx.ExecContext(ctx, "CALL DistributePrizes(?)", tournamentID)
+    if err != nil {
+        return fmt.Errorf("prize distribution failed: %w", err)
+    }
+
+    if err := tx.Commit(); err != nil {
+        return fmt.Errorf("failed to commit transaction: %w", err)
+    }
+
+    return nil
+}
+
+func (r *TournamentRepository) Exists(ctx context.Context, id uint) (bool, error) {
+    var exists bool
+    query := "SELECT EXISTS(SELECT 1 FROM tournaments WHERE id = ?)"
+    err := r.db.QueryRowContext(ctx, query, id).Scan(&exists)
+    return exists, err
+}

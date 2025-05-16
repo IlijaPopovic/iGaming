@@ -23,6 +23,7 @@ func NewRouter(db *sql.DB) http.Handler {
 
 	playerRepo := repository.NewPlayerRepository(db)
     playerHandler := handlers.NewPlayerHandler(playerRepo)
+	rankingHandler := handlers.NewRankingHandler(playerRepo)
 
 	betRepo := repository.NewTournamentBetRepository(db, playerRepo, tournamentRepo)
 	betHandler := handlers.NewTournamentBetHandler(betRepo)
@@ -32,11 +33,18 @@ func NewRouter(db *sql.DB) http.Handler {
 	router.Get("/tournaments", tournamentHandler.GetTournaments)
 	router.Post("/tournaments", tournamentHandler.CreateTournament)
 
+	// NOT WORKING YET
+	//router.Post("/tournaments/{id}/prizes", tournamentHandler.DistributePrizes)
+
 	router.Get("/players", playerHandler.GetPlayers)
 	router.Post("/players", playerHandler.CreatePlayer)
 
 	router.Get("/bets", betHandler.GetBets)
 	router.Post("/bets", betHandler.CreateBet)
+
+	router.Get("/rankings", rankingHandler.GetPlayerRankings)
+
+	
 
 	return router
 }

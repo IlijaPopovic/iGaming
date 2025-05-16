@@ -23,10 +23,5 @@ tmp/
 # Git-specific files
 *.orig
 
-# Go-specific files
-*.cover
-*.mod
-*.sum
-
 # Docker-related files
 docker-compose.override.yml
