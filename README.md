@@ -89,7 +89,7 @@ Responsible for HTTP request handling.
 
 ---
 
-## helperss/
+## helpers/
 
 - `http_helpers.go`: Utility functions for handling JSON responses and errors.
 
