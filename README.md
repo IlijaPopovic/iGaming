@@ -151,22 +151,22 @@ Responsible for HTTP request handling.
 
 ## Efficiency & Edge Cases
 
-Indexed & Constrained: I added indexes on player_id, tournament_id, balances, and dates. I also enforced data rules (email format, valid dates) at the schema level.
+- Indexed & Constrained: I added indexes on player_id, tournament_id, balances, and dates. I also enforced data rules (email format, valid dates) at the schema level.
 
-Atomic Distribution: The procedure runs inside a transaction with SELECT … FOR UPDATE on the tournament row to prevent race conditions.
+- Atomic Distribution: The procedure runs inside a transaction with SELECT … FOR UPDATE on the tournament row to prevent race conditions.
 
-Fast-Fail Guards: We immediately raise errors if there are no bets or prizes already distributed, skipping temp tables.
+- Fast-Fail Guards: We immediately raise errors if there are no bets or prizes already distributed, skipping temp tables.
 
-Set-Based Logic: Aggregations and rankings happen with temporary tables and window functions—no looping over rows.
+- Set-Based Logic: Aggregations and rankings happen with temporary tables and window functions—no looping over rows.
 
-Cleanup Safety: All temp tables are dropped at the end, and InnoDB ensures a full rollback on errors.
+- Cleanup Safety: All temp tables are dropped at the end, and InnoDB ensures a full rollback on errors.
 
 ## TODO
 
-Replace temporary tables in DistributePrizes with CTEs for clearer, inline data staging.
+- Replace temporary tables in DistributePrizes with CTEs for clearer, inline data staging.
 
-Experiment with chaining CTEs for complex prize calculations and player analytics.
+- Experiment with chaining CTEs for complex prize calculations and player analytics.
 
-Benchmark using CTEs vs temp tables to measure performance gains.
+- Benchmark using CTEs vs temp tables to measure performance gains.
 
-Refine the prize split logic to handle ties and variable tier distributions accurately.
+- Refine the prize split logic to handle ties and variable tier distributions accurately.
