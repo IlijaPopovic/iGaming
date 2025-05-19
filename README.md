@@ -138,14 +138,14 @@ Responsible for HTTP request handling.
 
 ## Lessons Learned and Challenges
 
-> - **Swagger in Go vs C#**
->   I usualy used Postman collections or the Microsoft‑style Swagger (Swashbuckle) in C#, so switching to swaggo/swag in Go was eye‑opening. The core concepts (comments → JSON schema → UI) are the same, but the annotation syntax and comment placement differ. I overcame this by reading the GoDoc examples, experimenting with a small endpoint, and iterating until the generated `swagger.yaml` matched what I expected.
-> - **SQL Migrations with Goose**
->   Here I chose goose. Writing idempotent, reversible migration took some trial and error.
-> - **Waiting for Dependencies**
->   Docker would often spin up the API before MySQL was ready, causing connection errors. I wrote a simple `wait_for_db.sh`, which made the start‑up process reliable in CI/CD and local Docker Compose.
-> - **Consistency in Error Handling**
->   Ensuring every handler returned JSON in the same shape took some refactoring. I created `http_helpers.go` with helper functions like `WriteJSON(w, code, payload)` and a central `ErrorResponse` struct, so adding a new error case never meant copy‑pasting boilerplate.
+- **Swagger in Go vs C#**
+  I usualy used Postman collections or the Microsoft‑style Swagger (Swashbuckle) in C#, so switching to swaggo/swag in Go was eye‑opening. The core concepts (comments → JSON schema → UI) are the same, but the annotation syntax and comment placement differ. I overcame this by reading the GoDoc examples, experimenting with a small endpoint, and iterating until the generated `swagger.yaml` matched what I expected.
+- **SQL Migrations with Goose**
+  Here I chose goose. Writing idempotent, reversible migration took some trial and error.
+- **Waiting for Dependencies**
+  Docker would often spin up the API before MySQL was ready, causing connection errors. I wrote a simple `wait_for_db.sh`, which made the start‑up process reliable in CI/CD and local Docker Compose.
+- **Consistency in Error Handling**
+  Ensuring every handler returned JSON in the same shape took some refactoring. I created `http_helpers.go` with helper functions like `WriteJSON(w, code, payload)` and a central `ErrorResponse` struct, so adding a new error case never meant copy‑pasting boilerplate.
 
 ---
 
