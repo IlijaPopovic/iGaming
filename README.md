@@ -40,7 +40,7 @@ make start-project
 ### `config/`
 
 - `config.go`: Loads environment variables and application settings.
-- `db.go`: Connects to the PostgreSQL database.
+- `db.go`: Connects to the MySQL database.
 
 ### `server/`
 
