@@ -19,6 +19,7 @@ CREATE TABLE tournaments (
     prize_pool DECIMAL(15, 2) NOT NULL,
     start_date DATETIME NOT NULL,
     end_date DATETIME NOT NULL,
+    prizes_distributed BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT chk_valid_dates CHECK (end_date > start_date)
@@ -51,70 +52,118 @@ CREATE TABLE tournament_results (
 CREATE PROCEDURE DistributePrizes(IN target_tournament_id INT)
 BEGIN
     DECLARE total_prize_pool DECIMAL(15, 2);
+    DECLARE distribution_status BOOLEAN;
 
-    -- Get the prize pool
-    SELECT prize_pool INTO total_prize_pool 
+    START TRANSACTION;
+
+    -- Check distribution status with lock
+    SELECT prize_pool, prizes_distributed 
+    INTO total_prize_pool, distribution_status
     FROM tournaments 
-    WHERE id = target_tournament_id;
+    WHERE id = target_tournament_id 
+    FOR UPDATE;
 
-    -- Temp table: Bet counts
-    CREATE TEMPORARY TABLE tmp_bet_counts (
-        player_id INT,
-        total_bets INT
+    IF distribution_status THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Prizes already distributed for this tournament';
+    END IF;
+
+    -- Guard against empty tournaments
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM tournament_bets 
+        WHERE tournament_id = target_tournament_id
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'No bets found for tournament';
+    END IF;
+
+    -- Temp table: Total bet amounts per player
+    CREATE TEMPORARY TABLE tmp_bet_amounts (
+        player_id INT PRIMARY KEY,
+        total_bet_amount DECIMAL(15, 2)
     );
 
-    INSERT INTO tmp_bet_counts (player_id, total_bets)
-    SELECT player_id, COUNT(*) AS total_bets
+    INSERT INTO tmp_bet_amounts (player_id, total_bet_amount)
+    SELECT 
+        player_id, 
+        SUM(bet_amount) AS total_bet_amount
     FROM tournament_bets
     WHERE tournament_id = target_tournament_id
     GROUP BY player_id;
 
-    -- Temp table: Ranked players
+    -- Temp table: Ranked players by bet amount
     CREATE TEMPORARY TABLE tmp_ranked_players (
-        player_id INT,
+        player_id INT PRIMARY KEY,
         placement INT
     );
 
     INSERT INTO tmp_ranked_players (player_id, placement)
     SELECT 
         player_id,
-        DENSE_RANK() OVER (ORDER BY total_bets DESC) AS placement
-    FROM tmp_bet_counts;
+        DENSE_RANK() OVER (ORDER BY total_bet_amount DESC) AS placement
+    FROM tmp_bet_amounts;
 
-    -- Temp table: Placement counts
-    CREATE TEMPORARY TABLE tmp_placement_counts (
+    -- Temp table: Placement groups with sizes
+    CREATE TEMPORARY TABLE tmp_placement_groups (
         placement INT,
-        player_count INT
+        group_size INT
     );
 
-    INSERT INTO tmp_placement_counts
-    SELECT placement, COUNT(*) AS player_count
+    INSERT INTO tmp_placement_groups (placement, group_size)
+    SELECT placement, COUNT(*) AS group_size
     FROM tmp_ranked_players
     WHERE placement <= 3
     GROUP BY placement;
 
-    -- Temp table: Prize distribution
+    -- Temp table: Prize tier percentages
+    CREATE TEMPORARY TABLE tier_percentages (
+        tier INT PRIMARY KEY,
+        percentage DECIMAL(5,2)
+    );
+
+    INSERT INTO tier_percentages (tier, percentage)
+    VALUES (1, 50.00), (2, 30.00), (3, 20.00);
+
+    -- Calculate prize allocation dynamically
     CREATE TEMPORARY TABLE tmp_prize_distribution (
         player_id INT,
         placement INT,
         prize DECIMAL(15, 2)
     );
+
     -- >>>>>>>>>>>CHAGE THE SPLIT LATTER IT DOES NOT MAKE SENSE!
     INSERT INTO tmp_prize_distribution (player_id, placement, prize)
     SELECT
         rp.player_id,
         rp.placement,
         CASE rp.placement
-            WHEN 1 THEN total_prize_pool * 0.5 / COALESCE(pc.player_count, 1)
-            WHEN 2 THEN total_prize_pool * 0.3 / COALESCE(pc.player_count, 1)
-            WHEN 3 THEN total_prize_pool * 0.2 / COALESCE(pc.player_count, 1)
+            WHEN 1 THEN total_prize_pool * 0.5 / COALESCE(pg.group_size, 1)
+            WHEN 2 THEN total_prize_pool * 0.3 / COALESCE(pg.group_size, 1)
+            WHEN 3 THEN total_prize_pool * 0.2 / COALESCE(pg.group_size, 1)
             ELSE 0
         END AS prize
     FROM tmp_ranked_players rp
-    LEFT JOIN tmp_placement_counts pc ON rp.placement = pc.placement
+    LEFT JOIN tmp_placement_groups pg ON rp.placement = pg.placement
     WHERE rp.placement <= 3;
 
-    -- Insert into tournament_results
+    -- INSERT INTO tmp_prize_distribution (player_id, placement, prize)
+    -- SELECT
+    --     rp.player_id,
+    --     rp.placement,
+    --     COALESCE(
+    --         (
+    --             SELECT SUM(percentage)
+    --             FROM tier_percentages
+    --             WHERE tier BETWEEN pg.placement AND LEAST(pg.placement + pg.group_size - 1, 3)
+    --         ) * total_prize_pool / 100 / pg.group_size,
+    --         0
+    --     ) AS prize
+    -- FROM tmp_ranked_players rp
+    -- JOIN tmp_placement_groups pg ON rp.placement = pg.placement
+    -- WHERE rp.placement <= 3;
+
+    -- Insert/update tournament results
     INSERT INTO tournament_results (tournament_id, player_id, placement, prize_amount)
     SELECT
         target_tournament_id,
@@ -126,15 +175,22 @@ BEGIN
         placement = VALUES(placement),
         prize_amount = VALUES(prize_amount);
 
-    -- Update players
+    -- Update player balances
     UPDATE players p
     JOIN tmp_prize_distribution pd ON p.id = pd.player_id
     SET p.account_balance = p.account_balance + pd.prize;
 
+    UPDATE tournaments
+    SET prizes_distributed = TRUE
+    WHERE id = target_tournament_id;
+
+    COMMIT;
+
     -- Cleanup
-    DROP TEMPORARY TABLE IF EXISTS tmp_bet_counts;
+    DROP TEMPORARY TABLE IF EXISTS tmp_bet_amounts;
     DROP TEMPORARY TABLE IF EXISTS tmp_ranked_players;
-    DROP TEMPORARY TABLE IF EXISTS tmp_placement_counts;
+    DROP TEMPORARY TABLE IF EXISTS tmp_placement_groups;
+    DROP TEMPORARY TABLE IF EXISTS tier_percentages;
     DROP TEMPORARY TABLE IF EXISTS tmp_prize_distribution;
 END;
 -- +goose StatementEnd
@@ -168,7 +224,12 @@ INSERT INTO players (name, email, password_hash, account_balance) VALUES
 ('George Wilson', 'george.wilson@pokermail.com', '$2a$10$AS1dF3gH6jK8L9P', 12800.00),
 ('Hannah White', 'hannah.white@pokermail.com', '$2a$10$ZX3cV4bN5m6M7Q8', 6400.00),
 ('Ian Moore', 'ian.moore@pokermail.com', '$2a$10$RT6yT7uI8o9P0Q1', 2300.00),
-('Jenny Taylor', 'jenny.taylor@pokermail.com', '$2a$10$EK4jL5mN6bV3C2X', 5100.00);
+('Jenny Taylor', 'jenny.taylor1@pokermail.com', '$2a$10$EK4jL5mN6bV3C2X', 100.00),
+('Jenny Taylor', 'jenny.taylor2@pokermail.com', '$2a$10$EK4jL5mN6bV3C2X', 100.00),
+('Jenny Taylor', 'jenny.taylor3@pokermail.com', '$2a$10$EK4jL5mN6bV3C2X', 100.00),
+('Jenny Taylor', 'jenny.taylor4@pokermail.com', '$2a$10$EK4jL5mN6bV3C2X', 100.00),
+('Jenny Taylor', 'jenny.taylor5@pokermail.com', '$2a$10$EK4jL5mN6bV3C2X', 100.00),
+('Jenny Taylor', 'jenny.taylor6@pokermail.com', '$2a$10$EK4jL5mN6bV3C2X', 100.00);
 
 INSERT INTO tournaments (name, prize_pool, start_date, end_date) VALUES
 ('Winter Classic', 25000.00, '2023-01-10 14:00:00', '2023-01-12 22:00:00'),
@@ -180,7 +241,8 @@ INSERT INTO tournaments (name, prize_pool, start_date, end_date) VALUES
 ('High Roller Event', 200000.00, '2023-07-20 12:00:00', '2023-07-25 12:00:00'),
 ('Fast Fold Frenzy', 30000.00, '2023-04-10 18:00:00', '2023-04-12 18:00:00'),
 ('New Year Knockout', 5000.00, '2023-12-31 23:00:00', '2024-01-01 06:00:00'),
-('Satellite Special', 15000.00, '2023-08-15 10:00:00', '2023-08-16 22:00:00');
+('Satellite Special', 15000.00, '2023-08-15 10:00:00', '2023-08-16 22:00:00'),
+('Satellite Special22', 10000.00, '2023-08-15 10:00:00', '2023-08-16 22:00:00');
 
 INSERT INTO tournament_bets (player_id, tournament_id, bet_amount) VALUES
 (1, 1, 500.00), (1, 1, 300.00),
@@ -192,7 +254,12 @@ INSERT INTO tournament_bets (player_id, tournament_id, bet_amount) VALUES
 (7, 7, 3000.00),
 (8, 8, 600.00),
 (9, 9, 100.00), (9, 9, 50.00),
-(10, 10, 450.00);
+(10, 11, 100.00),
+(11, 11, 80.00),
+(12, 11, 80.00),
+(13, 11, 80.00),
+(14, 11, 50.00),
+(15, 11, 20.00);
 
 -- +goose Down
 

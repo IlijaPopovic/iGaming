@@ -23,43 +23,71 @@ func NewTournamentBetRepository(db *sql.DB, playerRepo *PlayerRepository, tourna
 }
 
 func (r *TournamentBetRepository) Create(ctx context.Context, bet *models.TournamentBet) error {
-	if _, err := r.playerRepo.GetPlayerByID(ctx, bet.PlayerID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("player with ID %d does not exist", bet.PlayerID)
-		}
-		return fmt.Errorf("failed to validate player: %w", err)
-	}
+    tx, err := r.db.BeginTx(ctx, nil)
+    if err != nil {
+        return fmt.Errorf("failed to begin transaction: %w", err)
+    }
+    defer tx.Rollback()
 
-	if _, err := r.tournamentRepo.GetTournamentByID(ctx, bet.TournamentID); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("tournament with ID %d does not exist", bet.TournamentID)
-		}
-		return fmt.Errorf("failed to validate tournament: %w", err)
-	}
+    var currentBalance float64
+    err = tx.QueryRowContext(ctx,
+        "SELECT account_balance FROM players WHERE id = ? FOR UPDATE",
+        bet.PlayerID,
+    ).Scan(&currentBalance)
+    
+    if err != nil {
+        if errors.Is(err, sql.ErrNoRows) {
+            return fmt.Errorf("player with ID %d does not exist", bet.PlayerID)
+        }
+        return fmt.Errorf("failed to get player balance: %w", err)
+    }
 
-	query := `INSERT INTO tournament_bets 
-	(player_id, tournament_id, bet_amount) 
-	VALUES (?, ?, ?)`
+    var tournamentExists bool
+    err = tx.QueryRowContext(ctx,
+        "SELECT EXISTS(SELECT 1 FROM tournaments WHERE id = ?)",
+        bet.TournamentID,
+    ).Scan(&tournamentExists)
+    
+    if err != nil || !tournamentExists {
+        return fmt.Errorf("tournament with ID %d does not exist", bet.TournamentID)
+    }
 
-	result, err := r.db.ExecContext(
-		ctx,
-		query,
-		bet.PlayerID,
-		bet.TournamentID,
-		bet.BetAmount,
-	)
+    if currentBalance < bet.BetAmount {
+        return fmt.Errorf("insufficient funds: player has %.2f, needs %.2f", 
+            currentBalance, bet.BetAmount)
+    }
 
-	if err != nil {
-		return fmt.Errorf("database error: %w", err)
-	}
+    _, err = tx.ExecContext(ctx,
+        "UPDATE players SET account_balance = account_balance - ? WHERE id = ?",
+        bet.BetAmount, 
+        bet.PlayerID,
+    )
+    if err != nil {
+        return fmt.Errorf("failed to deduct funds: %w", err)
+    }
 
-	id, err := result.LastInsertId()
-	if err != nil {
-		return fmt.Errorf("failed to get last insert ID: %w", err)
-	}
+    result, err := tx.ExecContext(ctx,
+        `INSERT INTO tournament_bets (player_id, tournament_id, bet_amount) 
+         VALUES (?, ?, ?)`,
+        bet.PlayerID, 
+        bet.TournamentID, 
+        bet.BetAmount,
+    )
+    if err != nil {
+        return fmt.Errorf("failed to create bet: %w", err)
+    }
 
-	bet.ID = uint(id)
-	return nil
+    if err := tx.Commit(); err != nil {
+        return fmt.Errorf("transaction commit failed: %w", err)
+    }
+
+    id, err := result.LastInsertId()
+    if err != nil {
+        return fmt.Errorf("failed to get last insert ID: %w", err)
+    }
+    bet.ID = uint(id)
+    
+    return nil
 }
 
 func (r *TournamentBetRepository) GetAll(ctx context.Context) ([]models.TournamentBet, error) {
@@ -95,3 +123,46 @@ func (r *TournamentBetRepository) GetAll(ctx context.Context) ([]models.Tourname
 
 	return bets, nil
 }
+
+
+// THIS FUNCTION IS USING GetPlayerByID and GetTorunametByID, but not a good implementation for transaction
+
+// func (r *TournamentBetRepository) Create(ctx context.Context, bet *models.TournamentBet) error {
+// 	if _, err := r.playerRepo.GetPlayerByID(ctx, bet.PlayerID); err != nil {
+// 		if errors.Is(err, sql.ErrNoRows) {
+// 			return fmt.Errorf("player with ID %d does not exist", bet.PlayerID)
+// 		}
+// 		return fmt.Errorf("failed to validate player: %w", err)
+// 	}
+
+// 	if _, err := r.tournamentRepo.GetTournamentByID(ctx, bet.TournamentID); err != nil {
+// 		if errors.Is(err, sql.ErrNoRows) {
+// 			return fmt.Errorf("tournament with ID %d does not exist", bet.TournamentID)
+// 		}
+// 		return fmt.Errorf("failed to validate tournament: %w", err)
+// 	}
+
+// 	query := `INSERT INTO tournament_bets 
+// 	(player_id, tournament_id, bet_amount) 
+// 	VALUES (?, ?, ?)`
+
+// 	result, err := r.db.ExecContext(
+// 		ctx,
+// 		query,
+// 		bet.PlayerID,
+// 		bet.TournamentID,
+// 		bet.BetAmount,
+// 	)
+
+// 	if err != nil {
+// 		return fmt.Errorf("database error: %w", err)
+// 	}
+
+// 	id, err := result.LastInsertId()
+// 	if err != nil {
+// 		return fmt.Errorf("failed to get last insert ID: %w", err)
+// 	}
+
+// 	bet.ID = uint(id)
+// 	return nil
+// }
