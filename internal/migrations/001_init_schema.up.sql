@@ -51,147 +51,100 @@ CREATE TABLE tournament_results (
 -- +goose StatementBegin
 CREATE PROCEDURE DistributePrizes(IN target_tournament_id INT)
 BEGIN
-    DECLARE total_prize_pool DECIMAL(15, 2);
+    DECLARE total_prize_pool DECIMAL(15,2);
     DECLARE distribution_status BOOLEAN;
 
     START TRANSACTION;
 
-    -- Check distribution status with lock
-    SELECT prize_pool, prizes_distributed 
-    INTO total_prize_pool, distribution_status
-    FROM tournaments 
-    WHERE id = target_tournament_id 
-    FOR UPDATE;
+    SELECT prize_pool, prizes_distributed
+      INTO total_prize_pool, distribution_status
+      FROM tournaments
+     WHERE id = target_tournament_id
+       FOR UPDATE;
 
     IF distribution_status THEN
         SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Prizes already distributed for this tournament';
+          SET MESSAGE_TEXT = 'Prizes already distributed';
     END IF;
 
-    -- Guard against empty tournaments
-    IF NOT EXISTS (
-        SELECT 1 
-        FROM tournament_bets 
-        WHERE tournament_id = target_tournament_id
-    ) THEN
+    IF NOT EXISTS (SELECT 1
+                     FROM tournament_bets
+                    WHERE tournament_id = target_tournament_id) THEN
         SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'No bets found for tournament';
+           SET MESSAGE_TEXT = 'No bets found';
     END IF;
 
-    -- Temp table: Total bet amounts per player
-    CREATE TEMPORARY TABLE tmp_bet_amounts (
-        player_id INT PRIMARY KEY,
-        total_bet_amount DECIMAL(15, 2)
-    );
+    CREATE TEMPORARY TABLE tmp_prize_distribution AS
+        WITH summed AS (
+            SELECT 
+                player_id, 
+                SUM(bet_amount) AS total_bet_amount
+            FROM tournament_bets
+            WHERE tournament_id = target_tournament_id
+            GROUP BY player_id
+        ),
+        ranked AS (
+            SELECT
+                player_id,
+                total_bet_amount,
+                DENSE_RANK() OVER (ORDER BY total_bet_amount DESC) AS placement
+            FROM summed
+        ),
+        placement_counts AS (
+            SELECT 
+                placement, 
+                COUNT(*) AS group_size
+            FROM ranked
+            WHERE placement <= 3
+            GROUP BY placement
+        ),
+        tier_percentages AS (
+            SELECT 1 AS placement, 0.50 AS pct
+            UNION ALL SELECT 2, 0.30
+            UNION ALL SELECT 3, 0.20
+        ),
+        prize_calc AS (
+            SELECT
+                r.player_id,
+                r.placement,
+                ROUND(
+                    COALESCE(
+                        (
+                            SELECT SUM(tp.pct)
+                            FROM tier_percentages tp
+                            WHERE tp.placement BETWEEN pc.placement 
+                                AND LEAST(pc.placement + pc.group_size, 4) - 1
+                        ) * total_prize_pool 
+                        / NULLIF(pc.group_size, 0),
+                        0
+                    ),
+                    2
+                ) AS prize
+        FROM ranked r
+        JOIN placement_counts pc ON r.placement = pc.placement
+        WHERE r.placement <= 3
+        )
+    SELECT player_id, placement, prize
+    FROM prize_calc;
 
-    INSERT INTO tmp_bet_amounts (player_id, total_bet_amount)
-    SELECT 
-        player_id, 
-        SUM(bet_amount) AS total_bet_amount
-    FROM tournament_bets
-    WHERE tournament_id = target_tournament_id
-    GROUP BY player_id;
-
-    -- Temp table: Ranked players by bet amount
-    CREATE TEMPORARY TABLE tmp_ranked_players (
-        player_id INT PRIMARY KEY,
-        placement INT
-    );
-
-    INSERT INTO tmp_ranked_players (player_id, placement)
-    SELECT 
-        player_id,
-        DENSE_RANK() OVER (ORDER BY total_bet_amount DESC) AS placement
-    FROM tmp_bet_amounts;
-
-    -- Temp table: Placement groups with sizes
-    CREATE TEMPORARY TABLE tmp_placement_groups (
-        placement INT,
-        group_size INT
-    );
-
-    INSERT INTO tmp_placement_groups (placement, group_size)
-    SELECT placement, COUNT(*) AS group_size
-    FROM tmp_ranked_players
-    WHERE placement <= 3
-    GROUP BY placement;
-
-    -- Temp table: Prize tier percentages
-    CREATE TEMPORARY TABLE tier_percentages (
-        tier INT PRIMARY KEY,
-        percentage DECIMAL(5,2)
-    );
-
-    INSERT INTO tier_percentages (tier, percentage)
-    VALUES (1, 50.00), (2, 30.00), (3, 20.00);
-
-    -- Calculate prize allocation dynamically
-    CREATE TEMPORARY TABLE tmp_prize_distribution (
-        player_id INT,
-        placement INT,
-        prize DECIMAL(15, 2)
-    );
-
-    -- >>>>>>>>>>>CHAGE THE SPLIT LATTER IT DOES NOT MAKE SENSE!
-    INSERT INTO tmp_prize_distribution (player_id, placement, prize)
-    SELECT
-        rp.player_id,
-        rp.placement,
-        CASE rp.placement
-            WHEN 1 THEN total_prize_pool * 0.5 / COALESCE(pg.group_size, 1)
-            WHEN 2 THEN total_prize_pool * 0.3 / COALESCE(pg.group_size, 1)
-            WHEN 3 THEN total_prize_pool * 0.2 / COALESCE(pg.group_size, 1)
-            ELSE 0
-        END AS prize
-    FROM tmp_ranked_players rp
-    LEFT JOIN tmp_placement_groups pg ON rp.placement = pg.placement
-    WHERE rp.placement <= 3;
-
-    -- INSERT INTO tmp_prize_distribution (player_id, placement, prize)
-    -- SELECT
-    --     rp.player_id,
-    --     rp.placement,
-    --     COALESCE(
-    --         (
-    --             SELECT SUM(percentage)
-    --             FROM tier_percentages
-    --             WHERE tier BETWEEN pg.placement AND LEAST(pg.placement + pg.group_size - 1, 3)
-    --         ) * total_prize_pool / 100 / pg.group_size,
-    --         0
-    --     ) AS prize
-    -- FROM tmp_ranked_players rp
-    -- JOIN tmp_placement_groups pg ON rp.placement = pg.placement
-    -- WHERE rp.placement <= 3;
-
-    -- Insert/update tournament results
     INSERT INTO tournament_results (tournament_id, player_id, placement, prize_amount)
-    SELECT
-        target_tournament_id,
-        player_id,
-        placement,
-        prize
-    FROM tmp_prize_distribution
+    SELECT target_tournament_id, player_id, placement, prize
+      FROM tmp_prize_distribution
     ON DUPLICATE KEY UPDATE
-        placement = VALUES(placement),
-        prize_amount = VALUES(prize_amount);
+      placement    = VALUES(placement),
+      prize_amount = VALUES(prize_amount);
 
-    -- Update player balances
     UPDATE players p
-    JOIN tmp_prize_distribution pd ON p.id = pd.player_id
-    SET p.account_balance = p.account_balance + pd.prize;
+      JOIN tmp_prize_distribution pd ON p.id = pd.player_id
+       SET p.account_balance = p.account_balance + pd.prize;
 
     UPDATE tournaments
-    SET prizes_distributed = TRUE
-    WHERE id = target_tournament_id;
+       SET prizes_distributed = TRUE
+     WHERE id = target_tournament_id;
+
+    DROP TEMPORARY TABLE IF EXISTS tmp_prize_distribution;
 
     COMMIT;
-
-    -- Cleanup
-    DROP TEMPORARY TABLE IF EXISTS tmp_bet_amounts;
-    DROP TEMPORARY TABLE IF EXISTS tmp_ranked_players;
-    DROP TEMPORARY TABLE IF EXISTS tmp_placement_groups;
-    DROP TEMPORARY TABLE IF EXISTS tier_percentages;
-    DROP TEMPORARY TABLE IF EXISTS tmp_prize_distribution;
 END;
 -- +goose StatementEnd
 

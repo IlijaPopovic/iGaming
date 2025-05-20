@@ -33,7 +33,6 @@ func NewRouter(db *sql.DB) http.Handler {
 	router.Get("/tournaments", tournamentHandler.GetTournaments)
 	router.Post("/tournaments", tournamentHandler.CreateTournament)
 
-	// NOT WORKING YET
 	router.Post("/tournaments/prizes/{id}", tournamentHandler.DistributePrizes)
 
 	router.Get("/players", playerHandler.GetPlayers)
